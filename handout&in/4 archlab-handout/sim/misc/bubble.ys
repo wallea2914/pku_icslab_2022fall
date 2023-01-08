@@ -1,0 +1,89 @@
+#name：赵伟城
+#ID：2100013165
+#
+# Execution begins at address 0 
+	.pos 0
+	irmovq stack, %rsp  	# Set up stack pointer
+	call main		# Execute main program
+	halt			# Terminate program 
+
+# Array of 8 elements
+.align 8
+Array:
+.quad 0xbca
+.quad 0xcba
+.quad 0xacb
+.quad 0xcab
+.quad 0xabc
+.quad 0xbac
+
+main:	
+    irmovq Array,%rdi
+	irmovq $6,%rsi
+	call bubble_sort		#call bubble_sort(Array,6)
+	ret
+
+# void bubble_sort(long *data, long count)
+# data in %rdi, count in %rsi
+bubble_sort:	
+    pushq %rbx
+    pushq %rbp
+    pushq %r12
+    pushq %r13
+    pushq %r14
+
+    irmovq $1,%r10  #constant 1
+    irmovq $8,%r8   #constant 8
+    # calculate r9 = count * 8
+    xorq %r9,%r9
+    jmp test
+loop:
+    addq %r8,%r9
+    subq %r10,%rsi
+test:
+    andq %rsi,%rsi
+    jne loop
+    
+    rrmovq %rdi,%rbp
+    addq %r9,%rbp
+    subq %r8,%rbp  #rbp--last  last = data + count - 1
+    jmp test1
+
+loop1:
+    rrmovq %rdi,%rbx #rbx--i    i = data
+    jmp test2
+
+loop2:
+    rrmovq %rbx,%r11 
+    addq %r8,%r11 #r11 = i + 1
+    mrmovq (%r11),%r12 #r12 = *(i + 1)
+    mrmovq (%rbx),%r13 #r13 = *i
+    rrmovq %r12,%r14
+    subq %r13,%r14 #*(i + 1) - *i
+    jge test3
+    rmmovq %r13,(%r11)
+    rmmovq %r12,(%rbx)
+
+test3:
+    addq %r8,%rbx # i++
+
+test2:
+    rrmovq %rbx,%r11
+    subq %rbp,%r11 #i - last
+    jl loop2
+    subq %r8,%rbp # last--
+
+test1:	
+    rrmovq %rbp,%r11
+    subq %rdi,%r11  #last - data
+    jg    loop1  
+    popq %rbx
+    popq %rbp
+    popq %r12
+    popq %r13
+    popq %r14 
+	ret                  
+
+# Stack starts here and grows to lower addresses
+	.pos 0x200
+stack:

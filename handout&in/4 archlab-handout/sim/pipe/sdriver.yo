@@ -1,0 +1,284 @@
+                            | #######################################################################
+                            | # Test for copying block of size 4;
+                            | #######################################################################
+0x000:                      | 	.pos 0
+0x000: 30f4a004000000000000 | main:	irmovq Stack, %rsp  	# Set up stack pointer
+                            | 
+                            | 	# Set up arguments for copy function and then invoke it
+0x00a: 30f20400000000000000 | 	irmovq $4, %rdx		# src and dst have 4 elements
+0x014: 30f6f803000000000000 | 	irmovq dest, %rsi	# dst array
+0x01e: 30f7c803000000000000 | 	irmovq src, %rdi	# src array
+0x028: 803200000000000000   | 	call ncopy		 
+0x031: 00                   | 	halt			# should halt with num nonzeros in %rax
+0x032:                      | StartFun:
+                            | #/* $begin ncopy-ys */
+                            | #####################################################################
+                            | # ncopy.ys - Copy a src block of len words to dst.
+                            | # Return the number of positive words (>0) contained in src.
+                            | #
+                            | # Include your name and ID here.
+                            | #####################################################################
+                            | #name：赵伟城
+                            | #ID：2100013165
+                            | #####################################################################
+                            | # Describe how and why you modified the baseline code.
+                            | #
+                            | #1. 删除第一个xor指令,因为寄存器的值初始默认为0
+                            | #
+                            | #2. 调整src++和dst++的位置，减少上下文的数据项依赖
+                            | #
+                            | #3. 在hcl文件实现iaddq
+                            | #
+                            | #4. 使用9x9循环展开，余数采用二分查找
+                            | #
+                            | #5. 解决加载/使用冒险，具体有两个方面：
+                            | #	  一是在循环展开里，一次性读入9个值，再一次性写入至9个位置
+                            | #	  二是在二分查找对应的跳转表里，每次读入数据之后，利用上次的条件码判
+                            | #		定rax是否加1，即上一次读入数字是否为正。
+                            | #		两个特殊情况说明，余数1和8对应的情况无法使用上述策略进行优化。
+                            | #		正确性说明:  上述策略在余数非8的时候，进入跳转点读入数字后立马判定跳转
+                            | #					理由在于，在使用二分查找时所有跳转使用的都是je和jl，这
+                            | #					保证了非8情况时第一次jle判定必定为真(即不会加1)。
+                            | #
+                            | #6. 在二分查找时对跳转策略的考虑
+                            | #	由于y86流水线跳转默认为使用跳转，因此在几次分叉口处，优先选择情况多的方向。
+                            | #
+                            | #7. 在二分查找时对测试数据的考虑
+                            | #	由于程序计算CPE时是采用平均数，那么对数组长度为1、2、3等几个小数的情况需要
+                            | #	尽快处理。因此，这点违背了策略6，先向1、2、3跳转，在1、2、3中又先向1跳转。
+                            | #
+                            | #####################################################################
+                            | # Do not modify this portion
+                            | # Function prologue.
+                            | # %rdi = src, %rsi = dst, %rdx = len
+0x032:                      | ncopy:
+                            | 
+                            | ##################################################################
+                            | # You can modify this portion
+                            | 	# Loop header
+                            | 	#xorq %rax,%rax		# count = 0;   ########采用寄存器默认0值
+                            | 	#andq %rdx,%rdx		# len <= 0?
+                            | 	#jle Done		# if so, goto Done:
+                            | 
+0x032: c0f2f7ffffffffffffff | 	iaddq $-9,%rdx
+0x03c: 72dd01000000000000   | 	jl judge4
+0x045:                      | while9:	
+0x045: 50a70000000000000000 | 	mrmovq (%rdi), %r10	# read val from src...
+0x04f: 50b70800000000000000 | 	mrmovq $8(%rdi), %r11
+0x059: 50c71000000000000000 | 	mrmovq $16(%rdi), %r12
+0x063: 50d71800000000000000 | 	mrmovq $24(%rdi), %r13
+0x06d: 50e72000000000000000 | 	mrmovq $32(%rdi), %r14
+0x077: 50372800000000000000 | 	mrmovq $40(%rdi), %rbx
+0x081: 50573000000000000000 | 	mrmovq $48(%rdi), %rbp
+0x08b: 50973800000000000000 | 	mrmovq $56(%rdi), %r9
+0x095: 50874000000000000000 | 	mrmovq $64(%rdi), %r8
+0x09f: c0f74800000000000000 | 	iaddq $72, %rdi		  #######改变顺序，减少数据项依赖
+0x0a9: 40a60000000000000000 | 	rmmovq %r10, (%rsi)	# ...and store it to dst
+0x0b3: 40b60800000000000000 | 	rmmovq %r11, $8(%rsi)
+0x0bd: 40c61000000000000000 | 	rmmovq %r12, $16(%rsi)
+0x0c7: 40d61800000000000000 | 	rmmovq %r13, $24(%rsi)
+0x0d1: 40e62000000000000000 | 	rmmovq %r14, $32(%rsi)
+0x0db: 40362800000000000000 | 	rmmovq %rbx, $40(%rsi)
+0x0e5: 40563000000000000000 | 	rmmovq %rbp, $48(%rsi)
+0x0ef: 40963800000000000000 | 	rmmovq %r9, $56(%rsi)
+0x0f9: 40864000000000000000 | 	rmmovq %r8, $64(%rsi)
+0x103: c0f64800000000000000 | 	iaddq $72, %rsi
+0x10d:                      | tmp80:		
+0x10d: 62aa                 | 	andq %r10, %r10		# val <= 0?
+0x10f: 712201000000000000   | 	jle tmp81		# if so, goto Npos:
+0x118: c0f00100000000000000 | 	iaddq $1, %rax		# count++
+0x122:                      | tmp81:
+0x122: 62bb                 | 	andq %r11,%r11
+0x124: 713701000000000000   | 	jle tmp82
+0x12d: c0f00100000000000000 | 	iaddq $1,%rax
+0x137:                      | tmp82:
+0x137: 62cc                 | 	andq %r12,%r12
+0x139: 714c01000000000000   | 	jle tmp83
+0x142: c0f00100000000000000 | 	iaddq $1,%rax
+0x14c:                      | tmp83:
+0x14c: 62dd                 | 	andq %r13,%r13
+0x14e: 716101000000000000   | 	jle tmp84
+0x157: c0f00100000000000000 | 	iaddq $1,%rax
+0x161:                      | tmp84:
+0x161: 62ee                 | 	andq %r14,%r14
+0x163: 717601000000000000   | 	jle tmp85
+0x16c: c0f00100000000000000 | 	iaddq $1,%rax
+0x176:                      | tmp85:
+0x176: 6233                 | 	andq %rbx,%rbx
+0x178: 718b01000000000000   | 	jle tmp86
+0x181: c0f00100000000000000 | 	iaddq $1,%rax
+0x18b:                      | tmp86:
+0x18b: 6255                 | 	andq %rbp,%rbp
+0x18d: 71a001000000000000   | 	jle tmp87
+0x196: c0f00100000000000000 | 	iaddq $1,%rax
+0x1a0:                      | tmp87:
+0x1a0: 6299                 | 	andq %r9,%r9
+0x1a2: 71b501000000000000   | 	jle tmp88
+0x1ab: c0f00100000000000000 | 	iaddq $1,%rax
+0x1b5:                      | tmp88:
+0x1b5: 6288                 | 	andq %r8,%r8
+0x1b7: 71ca01000000000000   | 	jle tmp89
+0x1c0: c0f00100000000000000 | 	iaddq $1,%rax
+0x1ca:                      | tmp89:
+0x1ca: c0f2f7ffffffffffffff | 	iaddq $-9, %rdx		# len-=9
+                            | #test8:
+                            | 	#rrmovq %rdx,%r10
+                            | 	#iaddq $-8,%r10
+0x1d4: 754500000000000000   | 	jge while9	# if so, goto Loop:
+                            | 
+                            | 	
+                            | ########################二叉搜索树
+                            | 	
+0x1dd:                      | judge4:
+0x1dd: c0f20500000000000000 | 	iaddq $5,%rdx #+9-4
+0x1e7: 724302000000000000   | 	jl judge1
+0x1f0: 760202000000000000   | 	jg judge6
+0x1f9: 732003000000000000   | 	je tmp4
+                            | 
+0x202:                      | judge6:
+0x202: c0f2feffffffffffffff | 	iaddq $-2,%rdx
+0x20c: 762702000000000000   | 	jg judge8
+0x215: 72f702000000000000   | 	jl tmp5
+                            | 	#iaddq $-1,%rdx
+0x21e: 73ce02000000000000   | 	je tmp6
+                            | 
+0x227:                      | judge8:
+0x227: c0f2feffffffffffffff | 	iaddq $-2,%rdx
+0x231: 72a502000000000000   | 	jl tmp7
+0x23a: 737c02000000000000   | 	je tmp8
+                            | 
+0x243:                      | judge1:
+0x243: c0f20300000000000000 | 	iaddq $3,%rdx #############细节，先跳1，长度较小的数组对结果影响很大
+0x24d: 739b03000000000000   | 	je tmp1
+0x256: 766002000000000000   | 	jg judge3
+0x25f: 90                   | 	ret
+                            | 
+0x260:                      | judge3:
+0x260: c0f2feffffffffffffff | 	iaddq $-2,%rdx
+0x26a: 727203000000000000   | 	jl tmp2
+0x273: 734903000000000000   | 	je tmp3
+                            | 
+                            | #######################跳转表
+0x27c:                      | tmp8:
+0x27c: 50873800000000000000 | 	mrmovq $56(%rdi),%r8
+0x286: 40863800000000000000 | 	rmmovq %r8,$56(%rsi)
+0x290: 6288                 | 	andq %r8,%r8
+0x292: 71a502000000000000   | 	jle tmp7
+0x29b: c0f00100000000000000 | 	iaddq $1,%rax
+                            | 
+                            | 
+0x2a5:                      | tmp7:
+0x2a5: 50a73000000000000000 | 	mrmovq $48(%rdi),%r10
+0x2af:                      | tmp77:
+0x2af: 40a63000000000000000 | 	rmmovq %r10,$48(%rsi)
+0x2b9: 62aa                 | 	andq %r10,%r10
+0x2bb: 71ce02000000000000   | 	jle tmp6
+0x2c4: c0f00100000000000000 | 	iaddq $1,%rax
+                            | 
+0x2ce:                      | tmp6:
+0x2ce: 50b72800000000000000 | 	mrmovq $40(%rdi),%r11
+0x2d8:                      | tmp66:
+0x2d8: 40b62800000000000000 | 	rmmovq %r11,$40(%rsi)
+0x2e2: 62bb                 | 	andq %r11,%r11
+0x2e4: 71f702000000000000   | 	jle tmp5
+0x2ed: c0f00100000000000000 | 	iaddq $1,%rax
+                            | 	
+0x2f7:                      | tmp5:
+0x2f7: 50c72000000000000000 | 	mrmovq $32(%rdi),%r12
+0x301:                      | tmp55:
+0x301: 40c62000000000000000 | 	rmmovq %r12,$32(%rsi)
+0x30b: 62cc                 | 	andq %r12,%r12
+0x30d: 712003000000000000   | 	jle tmp4
+0x316: c0f00100000000000000 | 	iaddq $1,%rax
+                            | 	
+                            | 
+0x320:                      | tmp4:
+0x320: 50d71800000000000000 | 	mrmovq $24(%rdi),%r13
+0x32a:                      | tmp44:
+0x32a: 40d61800000000000000 | 	rmmovq %r13,$24(%rsi)
+0x334: 62dd                 | 	andq %r13,%r13
+0x336: 714903000000000000   | 	jle tmp3
+0x33f: c0f00100000000000000 | 	iaddq $1,%rax
+                            | 
+                            | 
+0x349:                      | tmp3:
+0x349: 50e71000000000000000 | 	mrmovq $16(%rdi),%r14
+0x353:                      | tmp33:
+0x353: 40e61000000000000000 | 	rmmovq %r14,$16(%rsi)
+0x35d: 62ee                 | 	andq %r14,%r14
+0x35f: 717203000000000000   | 	jle tmp2
+0x368: c0f00100000000000000 | 	iaddq $1,%rax
+                            | 	
+                            | 
+0x372:                      | tmp2:
+0x372: 50370800000000000000 | 	mrmovq $8(%rdi),%rbx
+0x37c:                      | tmp22:
+0x37c: 40360800000000000000 | 	rmmovq %rbx,$8(%rsi)
+0x386: 6233                 | 	andq %rbx,%rbx
+0x388: 719b03000000000000   | 	jle tmp1
+0x391: c0f00100000000000000 | 	iaddq $1,%rax
+                            | 	
+                            | 
+0x39b:                      | tmp1:
+0x39b: 50570000000000000000 | 	mrmovq (%rdi),%rbp
+0x3a5:                      | tmp11:
+0x3a5: 40560000000000000000 | 	rmmovq %rbp,(%rsi)
+0x3af: 6255                 | 	andq %rbp,%rbp
+0x3b1: 71c403000000000000   | 	jle Done
+0x3ba: c0f00100000000000000 | 	iaddq $1,%rax
+                            | 
+                            | ##################################################################
+                            | # Do not modify the following section of code
+                            | # Function epilogue.
+0x3c4:                      | Done:
+0x3c4: 90                   | 	ret
+                            | ##################################################################
+                            | # Keep the following label at the end of your function
+0x3c5:                      | End:
+                            | #/* $end ncopy-ys */
+                            | 
+                            | 
+0x3c5:                      | EndFun:
+                            | 
+                            | ###############################
+                            | # Source and destination blocks 
+                            | ###############################
+0x3c8:                      | 	.align 8
+0x3c8:                      | src:
+0x3c8: ffffffffffffffff     | 	.quad -1
+0x3d0: 0200000000000000     | 	.quad 2
+0x3d8: 0300000000000000     | 	.quad 3
+0x3e0: fcffffffffffffff     | 	.quad -4
+0x3e8: fadebc0000000000     | 	.quad 0xbcdefa # This shouldn't get moved
+                            | 
+0x3f0:                      | 	.align 16
+0x3f0:                      | Predest:
+0x3f0: fadebc0000000000     | 	.quad 0xbcdefa
+0x3f8:                      | dest:
+0x3f8: abefcd0000000000     | 	.quad 0xcdefab
+0x400: abefcd0000000000     | 	.quad 0xcdefab
+0x408: abefcd0000000000     | 	.quad 0xcdefab
+0x410: abefcd0000000000     | 	.quad 0xcdefab
+0x418:                      | Postdest:
+0x418: bcfade0000000000     | 	.quad 0xdefabc
+                            | 
+0x420:                      | .align 8
+                            | # Run time stack
+0x420: 0000000000000000     | 	.quad 0
+0x428: 0000000000000000     | 	.quad 0
+0x430: 0000000000000000     | 	.quad 0
+0x438: 0000000000000000     | 	.quad 0
+0x440: 0000000000000000     | 	.quad 0
+0x448: 0000000000000000     | 	.quad 0
+0x450: 0000000000000000     | 	.quad 0
+0x458: 0000000000000000     | 	.quad 0
+0x460: 0000000000000000     | 	.quad 0
+0x468: 0000000000000000     | 	.quad 0
+0x470: 0000000000000000     | 	.quad 0
+0x478: 0000000000000000     | 	.quad 0
+0x480: 0000000000000000     | 	.quad 0
+0x488: 0000000000000000     | 	.quad 0
+0x490: 0000000000000000     | 	.quad 0
+0x498: 0000000000000000     | 	.quad 0
+                            | 
+0x4a0:                      | Stack:

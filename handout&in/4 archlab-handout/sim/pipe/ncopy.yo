@@ -1,0 +1,212 @@
+                            | #/* $begin ncopy-ys */
+                            | ##################################################################
+                            | # ncopy.ys - Copy a src block of len words to dst.
+                            | # Return the number of positive words (>0) contained in src.
+                            | #
+                            | # Include your name and ID here.
+                            | ##################################################################
+                            | #name：赵伟城
+                            | #ID：2100013165
+                            | ##################################################################
+                            | # Describe how and why you modified the baseline code.
+                            | #
+                            | #1. 删除第一个xor指令,因为寄存器的值初始默认为0
+                            | #2. 调整src++和dst++的位置，减少上下文的数据项依赖
+                            | #3. 实现iaddq
+                            | #4. 使用8x8循环展开，之后采用一步步试的策略，即每走一步len--，并判断非0否
+                            | #5. 解决加载/使用冒险，具体有两个方面
+                            | #	  一是在循环展开里，一次性读入8个值，再一次性写入8个位置
+                            | #	  二是在一步步试的策略里，每一步读入下一步需要写入的值
+                            | #经测试：8x8:8.66 7x7:8.67  6x6:8.70  5x5:8.79
+                            | ##################################################################
+                            | # Do not modify this portion
+                            | # Function prologue.
+                            | # %rdi = src, %rsi = dst, %rdx = len
+0x000:                      | ncopy:
+                            | 
+                            | ##################################################################
+                            | # You can modify this portion
+                            | 	# Loop header
+                            | 	#xorq %rax,%rax		# count = 0;   ########采用寄存器默认0值
+                            | 	#andq %rdx,%rdx		# len <= 0?
+                            | 	#jle Done		# if so, goto Done:
+                            | 
+0x000: c0f2f7ffffffffffffff | 	iaddq $-9,%rdx
+0x00a: 72ab01000000000000   | 	jl judge4
+0x013:                      | while9:	
+0x013: 50a70000000000000000 | 	mrmovq (%rdi), %r10	# read val from src...
+0x01d: 50b70800000000000000 | 	mrmovq $8(%rdi), %r11
+0x027: 50c71000000000000000 | 	mrmovq $16(%rdi), %r12
+0x031: 50d71800000000000000 | 	mrmovq $24(%rdi), %r13
+0x03b: 50e72000000000000000 | 	mrmovq $32(%rdi), %r14
+0x045: 50372800000000000000 | 	mrmovq $40(%rdi), %rbx
+0x04f: 50573000000000000000 | 	mrmovq $48(%rdi), %rbp
+0x059: 50973800000000000000 | 	mrmovq $56(%rdi), %r9
+0x063: 50874000000000000000 | 	mrmovq $64(%rdi), %r8
+0x06d: c0f74800000000000000 | 	iaddq $72, %rdi		  #######改变顺序，减少数据项依赖
+0x077: 40a60000000000000000 | 	rmmovq %r10, (%rsi)	# ...and store it to dst
+0x081: 40b60800000000000000 | 	rmmovq %r11, $8(%rsi)
+0x08b: 40c61000000000000000 | 	rmmovq %r12, $16(%rsi)
+0x095: 40d61800000000000000 | 	rmmovq %r13, $24(%rsi)
+0x09f: 40e62000000000000000 | 	rmmovq %r14, $32(%rsi)
+0x0a9: 40362800000000000000 | 	rmmovq %rbx, $40(%rsi)
+0x0b3: 40563000000000000000 | 	rmmovq %rbp, $48(%rsi)
+0x0bd: 40963800000000000000 | 	rmmovq %r9, $56(%rsi)
+0x0c7: 40864000000000000000 | 	rmmovq %r8, $64(%rsi)
+0x0d1: c0f64800000000000000 | 	iaddq $72, %rsi
+0x0db:                      | tmp80:		
+0x0db: 62aa                 | 	andq %r10, %r10		# val <= 0?
+0x0dd: 71f000000000000000   | 	jle tmp81		# if so, goto Npos:
+0x0e6: c0f00100000000000000 | 	iaddq $1, %rax		# count++
+0x0f0:                      | tmp81:
+0x0f0: 62bb                 | 	andq %r11,%r11
+0x0f2: 710501000000000000   | 	jle tmp82
+0x0fb: c0f00100000000000000 | 	iaddq $1,%rax
+0x105:                      | tmp82:
+0x105: 62cc                 | 	andq %r12,%r12
+0x107: 711a01000000000000   | 	jle tmp83
+0x110: c0f00100000000000000 | 	iaddq $1,%rax
+0x11a:                      | tmp83:
+0x11a: 62dd                 | 	andq %r13,%r13
+0x11c: 712f01000000000000   | 	jle tmp84
+0x125: c0f00100000000000000 | 	iaddq $1,%rax
+0x12f:                      | tmp84:
+0x12f: 62ee                 | 	andq %r14,%r14
+0x131: 714401000000000000   | 	jle tmp85
+0x13a: c0f00100000000000000 | 	iaddq $1,%rax
+0x144:                      | tmp85:
+0x144: 6233                 | 	andq %rbx,%rbx
+0x146: 715901000000000000   | 	jle tmp86
+0x14f: c0f00100000000000000 | 	iaddq $1,%rax
+0x159:                      | tmp86:
+0x159: 6255                 | 	andq %rbp,%rbp
+0x15b: 716e01000000000000   | 	jle tmp87
+0x164: c0f00100000000000000 | 	iaddq $1,%rax
+0x16e:                      | tmp87:
+0x16e: 6299                 | 	andq %r9,%r9
+0x170: 718301000000000000   | 	jle tmp88
+0x179: c0f00100000000000000 | 	iaddq $1,%rax
+0x183:                      | tmp88:
+0x183: 6288                 | 	andq %r8,%r8
+0x185: 719801000000000000   | 	jle tmp89
+0x18e: c0f00100000000000000 | 	iaddq $1,%rax
+0x198:                      | tmp89:
+0x198: c0f2f7ffffffffffffff | 	iaddq $-9, %rdx		# len-=8
+                            | #test8:
+                            | 	#rrmovq %rdx,%r10
+                            | 	#iaddq $-8,%r10
+0x1a2: 751300000000000000   | 	jge while9	# if so, goto Loop:
+                            | 
+                            | 	
+                            | ########################二叉搜索树
+                            | 	
+0x1ab:                      | judge4:
+0x1ab: c0f20500000000000000 | 	iaddq $5,%rdx #+9-4
+0x1b5: 721102000000000000   | 	jl judge1
+0x1be: 76d001000000000000   | 	jg judge6
+0x1c7: 73db02000000000000   | 	je tmp4
+                            | 
+0x1d0:                      | judge6:
+0x1d0: c0f2feffffffffffffff | 	iaddq $-2,%rdx
+0x1da: 72b202000000000000   | 	jl tmp5
+                            | 	#iaddq $-1,%rdx
+0x1e3: 738902000000000000   | 	je tmp6
+0x1ec: 76f501000000000000   | 	jg judge8
+                            | 
+0x1f5:                      | judge8:
+0x1f5: c0f2feffffffffffffff | 	iaddq $-2,%rdx
+0x1ff: 726002000000000000   | 	jl tmp7
+0x208: 734a02000000000000   | 	je tmp8
+                            | 
+0x211:                      | judge1:
+0x211: c0f20300000000000000 | 	iaddq $3,%rdx #############细节，先跳1，长度较小的数组对结果影响很大
+0x21b: 735603000000000000   | 	je tmp1
+0x224: 762e02000000000000   | 	jg judge3
+0x22d: 90                   | 	ret
+                            | 
+0x22e:                      | judge3:
+0x22e: c0f2feffffffffffffff | 	iaddq $-2,%rdx
+0x238: 722d03000000000000   | 	jl tmp2
+0x241: 730403000000000000   | 	je tmp3
+                            | 
+                            | #######################跳转表
+0x24a:                      | tmp8:
+0x24a: 50873800000000000000 | 	mrmovq $56(%rdi),%r8
+0x254: 40863800000000000000 | 	rmmovq %r8,$56(%rsi)
+0x25e: 6288                 | 	andq %r8,%r8
+                            | 
+                            | 
+0x260:                      | tmp7:
+0x260: 50a73000000000000000 | 	mrmovq $48(%rdi),%r10
+0x26a: 717d02000000000000   | 	jle tmp77
+0x273: c0f00100000000000000 | 	iaddq $1,%rax
+0x27d:                      | tmp77:
+0x27d: 40a63000000000000000 | 	rmmovq %r10,$48(%rsi)
+0x287: 62aa                 | 	andq %r10,%r10
+                            | 
+0x289:                      | tmp6:
+0x289: 50b72800000000000000 | 	mrmovq $40(%rdi),%r11
+0x293: 71a602000000000000   | 	jle tmp66
+0x29c: c0f00100000000000000 | 	iaddq $1,%rax
+0x2a6:                      | tmp66:
+0x2a6: 40b62800000000000000 | 	rmmovq %r11,$40(%rsi)
+0x2b0: 62bb                 | 	andq %r11,%r11
+                            | 	
+                            | 
+0x2b2:                      | tmp5:
+0x2b2: 50c72000000000000000 | 	mrmovq $32(%rdi),%r12
+0x2bc: 71cf02000000000000   | 	jle tmp55
+0x2c5: c0f00100000000000000 | 	iaddq $1,%rax
+0x2cf:                      | tmp55:
+0x2cf: 40c62000000000000000 | 	rmmovq %r12,$32(%rsi)
+0x2d9: 62cc                 | 	andq %r12,%r12
+                            | 	
+                            | 
+0x2db:                      | tmp4:
+0x2db: 50d71800000000000000 | 	mrmovq $24(%rdi),%r13
+0x2e5: 71f802000000000000   | 	jle tmp44
+0x2ee: c0f00100000000000000 | 	iaddq $1,%rax
+0x2f8:                      | tmp44:
+0x2f8: 40d61800000000000000 | 	rmmovq %r13,$24(%rsi)
+0x302: 62dd                 | 	andq %r13,%r13
+                            | 
+                            | 
+0x304:                      | tmp3:
+0x304: 50e71000000000000000 | 	mrmovq $16(%rdi),%r14
+0x30e: 712103000000000000   | 	jle tmp33
+0x317: c0f00100000000000000 | 	iaddq $1,%rax
+0x321:                      | tmp33:
+0x321: 40e61000000000000000 | 	rmmovq %r14,$16(%rsi)
+0x32b: 62ee                 | 	andq %r14,%r14
+                            | 	
+                            | 
+0x32d:                      | tmp2:
+0x32d: 50370800000000000000 | 	mrmovq $8(%rdi),%rbx
+0x337: 714a03000000000000   | 	jle tmp22
+0x340: c0f00100000000000000 | 	iaddq $1,%rax
+0x34a:                      | tmp22:
+0x34a: 40360800000000000000 | 	rmmovq %rbx,$8(%rsi)
+0x354: 6233                 | 	andq %rbx,%rbx
+                            | 	
+                            | 
+0x356:                      | tmp1:
+0x356: 50570000000000000000 | 	mrmovq (%rdi),%rbp
+0x360: 717303000000000000   | 	jle tmp11
+0x369: c0f00100000000000000 | 	iaddq $1,%rax
+0x373:                      | tmp11:
+0x373: 40560000000000000000 | 	rmmovq %rbp,(%rsi)
+0x37d: 6255                 | 	andq %rbp,%rbp
+0x37f: 719203000000000000   | 	jle Done
+0x388: c0f00100000000000000 | 	iaddq $1,%rax
+                            | 
+                            | ##################################################################
+                            | # Do not modify the following section of code
+                            | # Function epilogue.
+0x392:                      | Done:
+0x392: 90                   | 	ret
+                            | ##################################################################
+                            | # Keep the following label at the end of your function
+0x393:                      | End:
+                            | #/* $end ncopy-ys */
+                            | 
+                            | 
