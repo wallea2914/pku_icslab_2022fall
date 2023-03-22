@@ -1,2 +1,2 @@
 # pku_icslab_2022fall
-pku2022秋季学期ics课程lab。代码量主要集中在后四个。malloc98分，其余均在当时的测试条件下满分。
+pku2022秋季学期ics课程lab.
